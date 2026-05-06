@@ -46,6 +46,8 @@ python -m proofread_app
 
 ## Build a Windows EXE
 
+Use this section as the final conflict-free version when resolving README merge conflicts. Keep it once, and remove any Git conflict marker lines plus duplicated README content.
+
 You need the project files only on the Windows machine that builds the EXE. The easiest options are:
 
 - Download the repository ZIP from GitHub, extract it, and open a terminal in the extracted folder.
