@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import platform
+import subprocess
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -10,6 +14,8 @@ from .engine import LOCAL_LLM_UNAVAILABLE_MESSAGE, LocalLLMConfigurationError, L
 from .profiles import (
     ProfileError,
     ProofreadingProfile,
+    backup_profiles,
+    default_profiles_dir,
     delete_profile,
     duplicate_profile,
     export_profile,
@@ -22,6 +28,19 @@ from .profiles import (
 from .settings import SettingsError, load_settings, parse_settings, save_settings
 
 WINDOW_TITLE = "Proofread App"
+
+
+def open_folder(path: Path) -> None:
+    """Open *path* in the operating system file manager."""
+
+    path.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        os.startfile(path)  # type: ignore[attr-defined]
+        return
+    if platform.system() == "Darwin":
+        subprocess.Popen(["open", str(path)])
+        return
+    subprocess.Popen(["xdg-open", str(path)])
 
 
 class ProofreadApp(tk.Tk):
@@ -310,7 +329,7 @@ class ProofreadApp(tk.Tk):
         dialog.transient(self)
         dialog.grab_set()
         dialog.configure(background="#ffffff")
-        dialog.minsize(780, 520)
+        dialog.minsize(860, 560)
 
         selected_index = tk.IntVar(value=0)
         name_var = tk.StringVar()
@@ -330,7 +349,7 @@ class ProofreadApp(tk.Tk):
         )
         ttk.Label(
             frame,
-            text="Profiles are portable JSON files that can be exported, imported, or copied to another Windows machine.",
+            text="Profiles are simple local JSON files that can be exported, imported, backed up, or copied to another machine.",
             style="Hint.TLabel",
             wraplength=720,
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 12))
@@ -370,7 +389,7 @@ class ProofreadApp(tk.Tk):
 
         action_bar = ttk.Frame(frame, style="Card.TFrame")
         action_bar.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(14, 0))
-        action_bar.columnconfigure(7, weight=1)
+        action_bar.columnconfigure(8, weight=1)
 
         def refresh_list(select_name: str | None = None) -> None:
             self.profiles = load_profiles()
@@ -483,7 +502,11 @@ class ProofreadApp(tk.Tk):
             )
             if not destination:
                 return
-            export_profile(profile, Path(destination))
+            try:
+                export_profile(profile, Path(destination))
+            except (OSError, ProfileError, ValueError) as exc:
+                messagebox.showerror("Profile error", str(exc), parent=dialog)
+                return
             self.status_var.set(f"Exported {profile.name} profile.")
 
         def import_new() -> None:
@@ -502,6 +525,31 @@ class ProofreadApp(tk.Tk):
             self.status_var.set(f"Imported {imported.name} profile.")
             refresh_list(imported.name)
 
+        def open_profile_folder() -> None:
+            try:
+                open_folder(default_profiles_dir())
+            except OSError as exc:
+                messagebox.showerror("Profile folder error", str(exc), parent=dialog)
+                return
+            self.status_var.set("Opened profiles folder.")
+
+        def backup_all() -> None:
+            destination = filedialog.asksaveasfilename(
+                parent=dialog,
+                title="Backup all profiles",
+                defaultextension=".zip",
+                initialfile=f"proofread_profiles_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                filetypes=[("Zip archive", "*.zip"), ("All files", "*.*")],
+            )
+            if not destination:
+                return
+            try:
+                backup_path = backup_profiles(Path(destination))
+            except (OSError, ProfileError, ValueError) as exc:
+                messagebox.showerror("Profile backup error", str(exc), parent=dialog)
+                return
+            self.status_var.set(f"Backed up profiles to {backup_path.name}.")
+
         profile_list.bind("<<ListboxSelect>>", on_select)
         ttk.Button(action_bar, text="New", command=new_profile, style="Secondary.TButton").grid(row=0, column=0, padx=(0, 8))
         ttk.Button(action_bar, text="Save", command=save_current, style="Primary.TButton").grid(row=0, column=1, padx=(0, 8))
@@ -517,7 +565,13 @@ class ProofreadApp(tk.Tk):
         ttk.Button(action_bar, text="Import", command=import_new, style="Secondary.TButton").grid(
             row=0, column=5, padx=(0, 8)
         )
-        ttk.Button(action_bar, text="Close", command=dialog.destroy, style="Secondary.TButton").grid(row=0, column=8)
+        ttk.Button(action_bar, text="Open Folder", command=open_profile_folder, style="Secondary.TButton").grid(
+            row=0, column=6, padx=(0, 8)
+        )
+        ttk.Button(action_bar, text="Backup All", command=backup_all, style="Secondary.TButton").grid(
+            row=0, column=7, padx=(0, 8)
+        )
+        ttk.Button(action_bar, text="Close", command=dialog.destroy, style="Secondary.TButton").grid(row=0, column=9)
 
         refresh_list(self.profile_var.get())
         dialog.wait_window()
