@@ -44,7 +44,21 @@ python -m proofread_app
 ```
 
 
-## Build a Windows EXE
+## Get a Windows EXE from GitHub Actions
+
+The easiest way to get an EXE is to let GitHub build it for you, so you do not spend time troubleshooting PyInstaller on your PC.
+
+1. Open the repository on GitHub.
+2. Go to **Actions**.
+3. Select **Build Windows EXE**.
+4. Click **Run workflow**.
+5. Wait for the workflow to finish.
+6. Open the completed workflow run and download the **Proofread-App-Windows-EXE** artifact.
+7. Unzip the artifact and run `Proofread App.exe`.
+
+The EXE still needs Ollama installed and running on the Windows machine where you use the app.
+
+## Build a Windows EXE locally
 
 You need the project files only on the Windows machine that builds the EXE. The easiest options are:
 
