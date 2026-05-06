@@ -12,6 +12,7 @@ from proofread_app.profiles import (
     export_profile,
     import_profile,
     load_profiles,
+    load_profiles_with_errors,
     profile_path,
     save_profile,
     slugify_profile_name,
@@ -101,3 +102,29 @@ def test_profile_validation_requires_core_fields_and_valid_temperature():
 
 def test_slugify_profile_name_makes_windows_friendly_names():
     assert slugify_profile_name("Grammar Only!") == "grammar_only"
+
+
+def test_load_profiles_skips_invalid_json_without_changing_file(tmp_path):
+    valid = ProofreadingProfile("Valid", "Valid edits.", "Proofread valid text.")
+    save_profile(valid, tmp_path)
+    invalid_path = tmp_path / "broken.json"
+    invalid_text = "{not valid json"
+    invalid_path.write_text(invalid_text, encoding="utf-8")
+
+    result = load_profiles_with_errors(tmp_path)
+
+    assert [profile.name for profile in result.profiles] == ["Valid"]
+    assert result.errors
+    assert "broken.json" in result.errors[0]
+    assert invalid_path.read_text(encoding="utf-8") == invalid_text
+
+
+def test_load_profiles_falls_back_to_defaults_when_all_files_are_invalid(tmp_path):
+    invalid_path = tmp_path / "broken.json"
+    invalid_path.write_text("{not valid json", encoding="utf-8")
+
+    result = load_profiles_with_errors(tmp_path)
+
+    assert {profile.name for profile in result.profiles} == {"Email", "Blog Post", "Grammar Only"}
+    assert any("built-in default profiles" in error for error in result.errors)
+    assert invalid_path.exists()

@@ -18,6 +18,14 @@ class ProfileError(ValueError):
 
 
 @dataclass(frozen=True)
+class ProfileLoadResult:
+    """Profiles loaded from disk plus non-fatal file errors."""
+
+    profiles: list["ProofreadingProfile"]
+    errors: list[str]
+
+
+@dataclass(frozen=True)
 class ProofreadingProfile:
     """A named proofreading task profile stored as a portable JSON file."""
 
@@ -136,26 +144,48 @@ def ensure_default_profiles(directory: Path | None = None) -> None:
 
 
 def load_profiles(directory: Path | None = None) -> list[ProofreadingProfile]:
-    """Load all portable profile JSON files from disk, creating defaults if needed."""
+    """Load valid portable profile JSON files from disk, creating defaults if needed."""
+
+    return load_profiles_with_errors(directory).profiles
+
+
+def load_profiles_with_errors(directory: Path | None = None) -> ProfileLoadResult:
+    """Load profiles and report invalid JSON/files without deleting or overwriting them."""
 
     profiles_dir = directory or default_profiles_dir()
     ensure_default_profiles(profiles_dir)
-    profiles = [load_profile(path) for path in sorted(profiles_dir.glob("*.json"))]
+    profiles: list[ProofreadingProfile] = []
+    errors: list[str] = []
+    for path in sorted(profiles_dir.glob("*.json")):
+        try:
+            profiles.append(load_profile(path))
+        except (OSError, ProfileError) as exc:
+            errors.append(f"{path.name}: {exc}")
+
+    if not profiles:
+        profiles = [profile.normalized() for profile in DEFAULT_PROFILES]
+        if errors:
+            errors.append("Using built-in default profiles until profile files are fixed.")
+
     default_order = {profile.name.casefold(): index for index, profile in enumerate(DEFAULT_PROFILES)}
-    return sorted(
+    profiles = sorted(
         profiles,
         key=lambda profile: (
             default_order.get(profile.name.casefold(), len(default_order)),
             profile.name.casefold(),
         ),
     )
+    return ProfileLoadResult(profiles, errors)
 
 
 def load_profile(path: Path) -> ProofreadingProfile:
     """Load a single profile JSON file."""
 
-    with path.open("r", encoding="utf-8") as profile_file:
-        payload = json.load(profile_file)
+    try:
+        with path.open("r", encoding="utf-8") as profile_file:
+            payload = json.load(profile_file)
+    except json.JSONDecodeError as exc:
+        raise ProfileError("Profile file is invalid JSON. Fix or restore it from backup; it was not changed.") from exc
     if not isinstance(payload, dict):
         raise ProfileError("Profile file must contain a JSON object.")
     return profile_from_dict(payload).normalized()
@@ -180,9 +210,12 @@ def save_profile(profile: ProofreadingProfile, directory: Path | None = None) ->
     normalized = profile.normalized()
     profiles_dir = directory or default_profiles_dir()
     profiles_dir.mkdir(parents=True, exist_ok=True)
-    with profile_path(normalized, profiles_dir).open("w", encoding="utf-8") as profile_file:
+    destination = profile_path(normalized, profiles_dir)
+    temporary = destination.with_suffix(".json.tmp")
+    with temporary.open("w", encoding="utf-8") as profile_file:
         json.dump(normalized.to_json_dict(), profile_file, indent=2)
         profile_file.write("\n")
+    temporary.replace(destination)
     return normalized
 
 
@@ -221,9 +254,11 @@ def export_profile(profile: ProofreadingProfile, destination: Path) -> Path:
 
     normalized = profile.normalized()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("w", encoding="utf-8") as profile_file:
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as profile_file:
         json.dump(normalized.to_json_dict(), profile_file, indent=2)
         profile_file.write("\n")
+    temporary.replace(destination)
     return destination
 
 

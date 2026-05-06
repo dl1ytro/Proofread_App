@@ -5,12 +5,20 @@ from __future__ import annotations
 import os
 import platform
 import subprocess
+import threading
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from .engine import LOCAL_LLM_UNAVAILABLE_MESSAGE, LocalLLMConfigurationError, LocalLLMUnavailable, proofread_text
+from .engine import (
+    EMPTY_INPUT_MESSAGE,
+    LOCAL_LLM_UNAVAILABLE_MESSAGE,
+    EmptyProofreadingInput,
+    LocalLLMConfigurationError,
+    LocalLLMUnavailable,
+    proofread_text,
+)
 from .profiles import (
     ProfileError,
     ProofreadingProfile,
@@ -20,10 +28,12 @@ from .profiles import (
     duplicate_profile,
     export_profile,
     import_profile,
-    load_profiles,
+    load_profiles_with_errors,
     profile_description,
     profile_names,
+    profile_path,
     save_profile,
+    slugify_profile_name,
 )
 from .settings import SettingsError, load_settings, parse_settings, save_settings
 
@@ -53,14 +63,22 @@ class ProofreadApp(tk.Tk):
         self.geometry("900x660")
         self.configure(background="#f3f4f6")
 
-        self.profiles = load_profiles()
+        profile_load = load_profiles_with_errors()
+        self.profiles = profile_load.profiles
+        self.profile_errors = profile_load.errors
         self.profile_var = tk.StringVar(value=self.profiles[0].name)
         self.status_var = tk.StringVar(value="Ready")
         self.description_var = tk.StringVar(value=profile_description(self.profile_var.get(), self.profiles))
         self.settings = load_settings()
+        self._closing = False
+        self._proofread_request_id = 0
+        self._proofread_in_progress = False
 
+        self.protocol("WM_DELETE_WINDOW", self._close_app)
         self._configure_style()
         self._build_layout()
+        if self.profile_errors:
+            self.after(100, self._show_profile_load_errors)
 
     def _configure_style(self) -> None:
         self.style = ttk.Style(self)
@@ -144,9 +162,8 @@ class ProofreadApp(tk.Tk):
         )
         self.profile_menu.grid(row=0, column=1, sticky="w")
         self.profile_menu.bind("<<ComboboxSelected>>", self._update_profile_description)
-        ttk.Button(controls, text="Proofread", command=self.run_proofread, style="Primary.TButton").grid(
-            row=0, column=2, sticky="e"
-        )
+        self.proofread_button = ttk.Button(controls, text="Proofread", command=self.run_proofread, style="Primary.TButton")
+        self.proofread_button.grid(row=0, column=2, sticky="e")
 
         ttk.Label(card, textvariable=self.description_var, style="Hint.TLabel", wraplength=360).grid(
             row=3, column=0, sticky="new", pady=(0, 8)
@@ -210,6 +227,15 @@ class ProofreadApp(tk.Tk):
     def _update_profile_description(self, _event: tk.Event | None = None) -> None:
         self.description_var.set(profile_description(self.profile_var.get(), self.profiles))
 
+    def _show_profile_load_errors(self) -> None:
+        message = "One or more profile files could not be loaded. They were left unchanged, and your other profiles are still available."
+        details = "\n".join(self.profile_errors)
+        self.status_var.set("Some profile files need attention.")
+        messagebox.showwarning("Profile file warning", f"{message}\n\n{details}")
+
+    def _close_app(self) -> None:
+        self._closing = True
+        self.destroy()
 
     def _selected_profile(self) -> ProofreadingProfile:
         for profile in self.profiles:
@@ -225,29 +251,73 @@ class ProofreadApp(tk.Tk):
         self._update_profile_description()
 
     def run_proofread(self) -> None:
+        if self._proofread_in_progress:
+            self.status_var.set("A proofreading request is already running.")
+            return
+
         source = self.input_text.get("1.0", "end-1c")
         if not source.strip():
-            self.status_var.set("Add text before proofreading.")
+            self.status_var.set(EMPTY_INPUT_MESSAGE)
+            messagebox.showinfo("No text to proofread", EMPTY_INPUT_MESSAGE)
             self.input_text.focus_set()
             return
 
-        self.status_var.set("Sending request to local Ollama...")
+        profile = self._selected_profile()
+        settings = self.settings
+        request_id = self._proofread_request_id + 1
+        self._proofread_request_id = request_id
+        self._proofread_in_progress = True
+        self.proofread_button.configure(state="disabled")
+        self.status_var.set("Proofreading with local Ollama...")
         self.update_idletasks()
 
-        try:
-            result = proofread_text(source, self._selected_profile(), self.settings)
-        except LocalLLMUnavailable as exc:
-            message = str(exc) or LOCAL_LLM_UNAVAILABLE_MESSAGE
-            self.status_var.set(message)
-            messagebox.showwarning("Local LLM unavailable", message)
+        def worker() -> None:
+            try:
+                result = proofread_text(source, profile, settings)
+            except (EmptyProofreadingInput, LocalLLMUnavailable, LocalLLMConfigurationError) as exc:
+                self._schedule_proofread_result(request_id, None, exc)
+            except Exception as exc:  # noqa: BLE001 - keep the UI reliable for unexpected local backend failures.
+                self._schedule_proofread_result(request_id, None, exc)
+            else:
+                self._schedule_proofread_result(request_id, result, None)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _schedule_proofread_result(self, request_id: int, result: str | None, error: Exception | None) -> None:
+        if self._closing:
             return
-        except LocalLLMConfigurationError as exc:
-            self.status_var.set(str(exc))
-            messagebox.showerror("Settings error", str(exc))
+        try:
+            self.after(0, lambda: self._finish_proofread(request_id, result, error))
+        except tk.TclError:
+            pass
+
+    def _finish_proofread(self, request_id: int, result: str | None, error: Exception | None) -> None:
+        if self._closing or request_id != self._proofread_request_id:
+            return
+        self._proofread_in_progress = False
+        self.proofread_button.configure(state="normal")
+
+        if error is not None:
+            if isinstance(error, LocalLLMConfigurationError):
+                self.status_var.set(str(error))
+                messagebox.showerror("Settings error", str(error))
+                return
+            if isinstance(error, EmptyProofreadingInput):
+                self.status_var.set(EMPTY_INPUT_MESSAGE)
+                messagebox.showinfo("No text to proofread", EMPTY_INPUT_MESSAGE)
+                return
+            if isinstance(error, LocalLLMUnavailable):
+                message = str(error) or LOCAL_LLM_UNAVAILABLE_MESSAGE
+                self.status_var.set(message)
+                messagebox.showwarning("Local LLM unavailable", message)
+                return
+            message = "Something went wrong while proofreading. Your input and profiles were not changed."
+            self.status_var.set(message)
+            messagebox.showerror("Proofreading error", f"{message}\n\n{error}")
             return
 
         self.output_text.delete("1.0", "end")
-        self.output_text.insert("1.0", result)
+        self.output_text.insert("1.0", result or "")
         self.status_var.set(f"Proofread offline with {self.settings.ollama_model} using {self.profile_var.get()} profile.")
 
     def copy_result(self) -> None:
@@ -392,7 +462,15 @@ class ProofreadApp(tk.Tk):
         action_bar.columnconfigure(8, weight=1)
 
         def refresh_list(select_name: str | None = None) -> None:
-            self.profiles = load_profiles()
+            profile_load = load_profiles_with_errors()
+            self.profiles = profile_load.profiles
+            if profile_load.errors:
+                messagebox.showwarning(
+                    "Profile file warning",
+                    "One or more profile files could not be loaded. They were left unchanged.\n\n"
+                    + "\n".join(profile_load.errors),
+                    parent=dialog,
+                )
             profile_list.delete(0, "end")
             for profile in self.profiles:
                 profile_list.insert("end", profile.name)
@@ -462,10 +540,12 @@ class ProofreadApp(tk.Tk):
             old_name = selected_profile().name if selected_index.get() >= 0 and self.profiles else None
             try:
                 profile = profile_from_fields()
-                if old_name and old_name != profile.name:
-                    delete_profile(old_name)
                 saved = save_profile(profile)
-            except (ProfileError, ValueError) as exc:
+                if old_name and old_name != saved.name:
+                    old_path = default_profiles_dir() / f"{slugify_profile_name(old_name)}.json"
+                    if old_path.resolve() != profile_path(saved).resolve():
+                        delete_profile(old_name)
+            except (OSError, ProfileError, ValueError) as exc:
                 messagebox.showerror("Profile error", str(exc), parent=dialog)
                 return
             self.status_var.set(f"Saved {saved.name} profile.")
