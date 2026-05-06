@@ -1,108 +1,100 @@
-"""Small local proofreading helpers for the first desktop UI."""
+"""Local LLM proofreading helpers backed by Ollama."""
 
 from __future__ import annotations
 
-import re
+import json
+import socket
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from typing import Protocol
+from urllib.parse import urlparse
 
-_COMMON_REPLACEMENTS = {
-    "teh": "the",
-    "adn": "and",
-    "recieve": "receive",
-    "recieved": "received",
-    "seperate": "separate",
-    "definately": "definitely",
-    "occured": "occurred",
-    "untill": "until",
-    "wich": "which",
-    "alot": "a lot",
-    "dont": "don't",
-    "cant": "can't",
-    "wont": "won't",
-    "im": "I'm",
-    "ive": "I've",
-}
+from .profiles import profile_description
+from .settings import AppSettings
 
-_ACADEMIC_REPLACEMENTS = {
-    "can't": "cannot",
-    "won't": "will not",
-    "don't": "do not",
-    "isn't": "is not",
-    "aren't": "are not",
-    "it's": "it is",
-}
-
-_BUSINESS_REPLACEMENTS = {
-    "asap": "as soon as possible",
-    "fyi": "for your information",
-    "thanks": "Thank you",
-}
+LOCAL_LLM_UNAVAILABLE_MESSAGE = "Local LLM is not available. Please start Ollama."
 
 
-def proofread_text(text: str, profile: str = "Standard") -> str:
-    """Return a lightly corrected version of *text* for the selected profile.
-
-    This is deliberately modest: it keeps the app local and responsive while the
-    first UI is being validated. A future service-backed engine can replace this
-    function without changing the UI layout.
-    """
-
-    normalized = _normalize_whitespace(text)
-    corrected = _replace_words(normalized, _COMMON_REPLACEMENTS)
-    corrected = _fix_punctuation_spacing(corrected)
-    corrected = _capitalize_sentences(corrected)
-
-    if profile == "Academic":
-        corrected = _replace_words(corrected, _ACADEMIC_REPLACEMENTS)
-    elif profile == "Business":
-        corrected = _replace_words(corrected, _BUSINESS_REPLACEMENTS)
-        corrected = _ensure_terminal_punctuation(corrected)
-
-    return corrected.strip()
+class LocalLLMUnavailable(RuntimeError):
+    """Raised when the local Ollama service cannot be reached."""
 
 
-def _normalize_whitespace(text: str) -> str:
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r" *\n *", "\n", text)
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
+class LocalLLMConfigurationError(ValueError):
+    """Raised when local LLM settings would send text outside the machine."""
 
 
-def _replace_words(text: str, replacements: dict[str, str]) -> str:
-    def replace(match: re.Match[str]) -> str:
-        word = match.group(0)
-        replacement = replacements[word.lower()]
-        if word.isupper():
-            return replacement.upper()
-        if word[:1].isupper():
-            return replacement[:1].upper() + replacement[1:]
-        return replacement
+class ProofreadingBackend(Protocol):
+    """Backend interface for offline proofreading providers."""
 
-    pattern = re.compile(r"\b(" + "|".join(re.escape(word) for word in replacements) + r")\b", re.IGNORECASE)
-    return pattern.sub(replace, text)
+    def proofread(self, text: str, profile: str) -> str:
+        """Return corrected text for the selected profile."""
 
 
-def _fix_punctuation_spacing(text: str) -> str:
-    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
-    text = re.sub(r"([,.;:!?])([^\s\n\"')\]}])", r"\1 \2", text)
-    text = re.sub(r"([!?.,]){2,}", lambda match: match.group(0)[0], text)
-    return text
+@dataclass(frozen=True)
+class OllamaBackend:
+    """Proofreading backend that talks to a local Ollama server."""
+
+    settings: AppSettings
+
+    def proofread(self, text: str, profile: str) -> str:
+        settings = self.settings.normalized()
+        endpoint = _validate_local_endpoint(settings.ollama_endpoint)
+        payload = {
+            "model": settings.ollama_model,
+            "prompt": _build_prompt(text, profile),
+            "stream": False,
+            "options": {"temperature": 0.1},
+        }
+        request = urllib.request.Request(
+            f"{endpoint}/api/generate",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=settings.ollama_timeout) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+        except (TimeoutError, socket.timeout, ConnectionError, urllib.error.URLError) as exc:
+            raise LocalLLMUnavailable(LOCAL_LLM_UNAVAILABLE_MESSAGE) from exc
+        except json.JSONDecodeError as exc:
+            raise LocalLLMUnavailable("Local LLM returned an unreadable response.") from exc
+
+        result = str(response_payload.get("response", "")).strip()
+        if not result:
+            raise LocalLLMUnavailable("Local LLM returned an empty response.")
+        return result
 
 
-def _capitalize_sentences(text: str) -> str:
-    chars = list(text)
-    should_capitalize = True
-    for index, char in enumerate(chars):
-        if char.isalpha() and should_capitalize:
-            chars[index] = char.upper()
-            should_capitalize = False
-        elif char in ".!?\n":
-            should_capitalize = True
-        elif not char.isspace():
-            should_capitalize = False
-    return "".join(chars)
+def proofread_text(text: str, profile: str = "Standard", settings: AppSettings | None = None) -> str:
+    """Proofread *text* offline with the configured local Ollama model."""
+
+    backend = OllamaBackend(settings or AppSettings())
+    return backend.proofread(text, profile)
 
 
-def _ensure_terminal_punctuation(text: str) -> str:
-    if text and text[-1] not in ".!?":
-        return f"{text}."
-    return text
+def _build_prompt(text: str, profile: str) -> str:
+    description = profile_description(profile)
+    return (
+        "You are an offline proofreading assistant running locally in Ollama. "
+        "Correct spelling, grammar, punctuation, capitalization, and spacing. "
+        "Preserve the user's meaning and do not add commentary. "
+        "Return only the corrected text.\n\n"
+        f"Profile: {profile}\n"
+        f"Profile guidance: {description}\n\n"
+        "Text to proofread:\n"
+        f"{text}"
+    )
+
+
+def _validate_local_endpoint(endpoint: str) -> str:
+    parsed = urlparse(endpoint)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise LocalLLMConfigurationError("Ollama endpoint must be an HTTP URL on this computer.")
+
+    host = parsed.hostname.lower()
+    if host not in {"localhost", "127.0.0.1", "::1"}:
+        raise LocalLLMConfigurationError("Ollama endpoint must point to localhost to keep text processing offline.")
+
+    return endpoint.rstrip("/")
