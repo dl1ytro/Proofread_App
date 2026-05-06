@@ -5,8 +5,9 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from .engine import proofread_text
+from .engine import LOCAL_LLM_UNAVAILABLE_MESSAGE, LocalLLMConfigurationError, LocalLLMUnavailable, proofread_text
 from .profiles import DEFAULT_PROFILES, profile_description, profile_names
+from .settings import SettingsError, load_settings, parse_settings, save_settings
 
 WINDOW_TITLE = "Proofread App"
 
@@ -24,6 +25,7 @@ class ProofreadApp(tk.Tk):
         self.profile_var = tk.StringVar(value=DEFAULT_PROFILES[0].name)
         self.status_var = tk.StringVar(value="Ready")
         self.description_var = tk.StringVar(value=profile_description(self.profile_var.get()))
+        self.settings = load_settings()
 
         self._configure_style()
         self._build_layout()
@@ -52,7 +54,7 @@ class ProofreadApp(tk.Tk):
         ttk.Label(shell, text="Proofread App", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             shell,
-            text="Paste text, choose a profile, and proofread without accounts or web views.",
+            text="Paste text, choose a profile, and proofread with your local Ollama model.",
             style="Status.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(4, 16))
 
@@ -78,8 +80,11 @@ class ProofreadApp(tk.Tk):
         ttk.Button(footer, text="Clear", command=self.clear_text, style="Secondary.TButton").grid(
             row=0, column=2, padx=(8, 0)
         )
-        ttk.Button(footer, text="Edit Profiles", command=self.show_profiles, style="Secondary.TButton").grid(
+        ttk.Button(footer, text="Settings", command=self.show_settings, style="Secondary.TButton").grid(
             row=0, column=3, padx=(8, 0)
+        )
+        ttk.Button(footer, text="Edit Profiles", command=self.show_profiles, style="Secondary.TButton").grid(
+            row=0, column=4, padx=(8, 0)
         )
 
     def _build_input_card(self, parent: ttk.Frame) -> ttk.Frame:
@@ -180,10 +185,24 @@ class ProofreadApp(tk.Tk):
             self.input_text.focus_set()
             return
 
-        result = proofread_text(source, self.profile_var.get())
+        self.status_var.set("Sending request to local Ollama...")
+        self.update_idletasks()
+
+        try:
+            result = proofread_text(source, self.profile_var.get(), self.settings)
+        except LocalLLMUnavailable as exc:
+            message = str(exc) or LOCAL_LLM_UNAVAILABLE_MESSAGE
+            self.status_var.set(message)
+            messagebox.showwarning("Local LLM unavailable", message)
+            return
+        except LocalLLMConfigurationError as exc:
+            self.status_var.set(str(exc))
+            messagebox.showerror("Settings error", str(exc))
+            return
+
         self.output_text.delete("1.0", "end")
         self.output_text.insert("1.0", result)
-        self.status_var.set(f"Proofread with {self.profile_var.get()} profile.")
+        self.status_var.set(f"Proofread offline with {self.settings.ollama_model} using {self.profile_var.get()} profile.")
 
     def copy_result(self) -> None:
         result = self.output_text.get("1.0", "end-1c")
@@ -199,6 +218,62 @@ class ProofreadApp(tk.Tk):
         self.output_text.delete("1.0", "end")
         self.status_var.set("Cleared input and output.")
         self.input_text.focus_set()
+
+    def show_settings(self) -> None:
+        """Open a settings dialog for the local Ollama backend."""
+
+        dialog = tk.Toplevel(self)
+        dialog.title("Settings")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.configure(background="#ffffff")
+        dialog.resizable(False, False)
+
+        endpoint_var = tk.StringVar(value=self.settings.ollama_endpoint)
+        model_var = tk.StringVar(value=self.settings.ollama_model)
+        timeout_var = tk.StringVar(value=str(self.settings.ollama_timeout))
+
+        frame = ttk.Frame(dialog, padding=16, style="Card.TFrame")
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(1, weight=1)
+
+        ttk.Label(frame, text="Local LLM settings", background="#ffffff", font=("Segoe UI Semibold", 12)).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
+        )
+        ttk.Label(
+            frame,
+            text="Proofreading requests are sent only to the local Ollama endpoint below.",
+            style="Hint.TLabel",
+            wraplength=360,
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 12))
+
+        ttk.Label(frame, text="Ollama endpoint", background="#ffffff").grid(row=2, column=0, sticky="w", pady=(0, 6))
+        ttk.Entry(frame, textvariable=endpoint_var, width=38).grid(row=2, column=1, sticky="ew", pady=(0, 6))
+
+        ttk.Label(frame, text="Model name", background="#ffffff").grid(row=3, column=0, sticky="w", pady=(0, 6))
+        ttk.Entry(frame, textvariable=model_var, width=38).grid(row=3, column=1, sticky="ew", pady=(0, 6))
+
+        ttk.Label(frame, text="Timeout (seconds)", background="#ffffff").grid(row=4, column=0, sticky="w", pady=(0, 12))
+        ttk.Entry(frame, textvariable=timeout_var, width=38).grid(row=4, column=1, sticky="ew", pady=(0, 12))
+
+        buttons = ttk.Frame(frame, style="Card.TFrame")
+        buttons.grid(row=5, column=0, columnspan=2, sticky="e")
+
+        def save() -> None:
+            try:
+                parsed = parse_settings(endpoint_var.get(), model_var.get(), timeout_var.get())
+                self.settings = save_settings(parsed)
+            except SettingsError as exc:
+                messagebox.showerror("Settings error", str(exc), parent=dialog)
+                return
+            self.status_var.set("Settings saved for local Ollama.")
+            dialog.destroy()
+
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy, style="Secondary.TButton").grid(
+            row=0, column=0, padx=(0, 8)
+        )
+        ttk.Button(buttons, text="Save", command=save, style="Primary.TButton").grid(row=0, column=1)
+        dialog.wait_window()
 
     def show_profiles(self) -> None:
         details = "\n\n".join(f"{profile.name}: {profile.description}" for profile in DEFAULT_PROFILES)
