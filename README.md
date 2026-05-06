@@ -47,7 +47,7 @@ Profiles define task-specific proofreading behavior. Each profile is a portable 
 
 The repository includes starter profiles in `profiles/email.json`, `profiles/blog_post.json`, and `profiles/grammar_only.json`. On first run, the app creates editable copies in the current user's profile folder: `%APPDATA%\Proofread App\profiles` on Windows, or `~/.proofread_app/profiles` on other platforms.
 
-Open `Edit Profiles` to create, edit, delete, duplicate, export, or import profile JSON files. Exported profile files can be copied to another Windows machine and imported there.
+Open `Edit Profiles` to create, edit, delete, duplicate, export, or import profile JSON files. The profile manager can also open the local profiles folder and back up every profile JSON file to a `.zip` archive. Exported profile files and backups can be copied to another machine and imported or restored there.
 
 ## Local LLM settings
 
@@ -57,4 +57,4 @@ Open `Settings` in the app to configure the Ollama backend:
 - Model name, default `llama3.2:3b`.
 - Timeout value in seconds, default `30`.
 
-Settings are stored in the current user's app data folder on Windows, or `~/.proofread_app/settings.json` on other platforms.
+Settings are stored as a simple `settings.json` file in the current user's app data folder on Windows, or `~/.proofread_app/settings.json` on other platforms. Profiles are stored as individual `profiles/*.json` files, so no database is required for the first version.

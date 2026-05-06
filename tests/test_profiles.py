@@ -1,10 +1,12 @@
 import json
+import zipfile
 
 import pytest
 
 from proofread_app.profiles import (
     ProfileError,
     ProofreadingProfile,
+    backup_profiles,
     delete_profile,
     duplicate_profile,
     export_profile,
@@ -73,6 +75,20 @@ def test_export_import_and_delete_profile(tmp_path):
 
     assert imported == profile.normalized()
     assert profile_path(imported, local_dir).exists()
+
+
+def test_backup_profiles_creates_zip_archive_with_all_profile_json_files(tmp_path):
+    profiles_dir = tmp_path / "profiles"
+    save_profile(ProofreadingProfile("Client Email", "Email edits.", "Proofread email."), profiles_dir)
+    save_profile(ProofreadingProfile("Blog", "Blog edits.", "Proofread blog."), profiles_dir)
+
+    backup_path = backup_profiles(tmp_path / "backup" / "profiles.zip", profiles_dir)
+
+    assert backup_path == tmp_path / "backup" / "profiles.zip"
+    with zipfile.ZipFile(backup_path) as archive:
+        assert sorted(archive.namelist()) == ["blog.json", "client_email.json"]
+        payload = json.loads(archive.read("client_email.json"))
+    assert payload["name"] == "Client Email"
 
 
 def test_profile_validation_requires_core_fields_and_valid_temperature():

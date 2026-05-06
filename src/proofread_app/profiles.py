@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -235,6 +236,22 @@ def import_profile(source: Path, directory: Path | None = None) -> ProofreadingP
     if source.resolve() != profile_path(saved, profiles_dir).resolve():
         shutil.copystat(source, profile_path(saved, profiles_dir), follow_symlinks=True)
     return saved
+
+
+def backup_profiles(destination: Path, directory: Path | None = None) -> Path:
+    """Back up every local profile JSON file into a portable zip archive."""
+
+    profiles_dir = directory or default_profiles_dir()
+    ensure_default_profiles(profiles_dir)
+    profile_files = sorted(profiles_dir.glob("*.json"))
+    if not profile_files:
+        raise ProfileError("No profile JSON files are available to back up.")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as backup_file:
+        for profile_file in profile_files:
+            backup_file.write(profile_file, arcname=profile_file.name)
+    return destination
 
 
 def profile_names(profiles: list[ProofreadingProfile] | None = None) -> list[str]:
