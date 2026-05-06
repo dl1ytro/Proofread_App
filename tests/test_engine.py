@@ -5,7 +5,12 @@ import urllib.error
 import pytest
 
 from proofread_app.engine import (
+    EMPTY_INPUT_MESSAGE,
+    EMPTY_RESPONSE_MESSAGE,
+    LOCAL_LLM_MISSING_MODEL_MESSAGE,
+    LOCAL_LLM_TIMEOUT_MESSAGE,
     LOCAL_LLM_UNAVAILABLE_MESSAGE,
+    EmptyProofreadingInput,
     LocalLLMConfigurationError,
     LocalLLMUnavailable,
     OllamaBackend,
@@ -91,7 +96,7 @@ def test_ollama_backend_fails_gracefully_on_timeout(monkeypatch):
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
 
-    with pytest.raises(LocalLLMUnavailable, match=LOCAL_LLM_UNAVAILABLE_MESSAGE):
+    with pytest.raises(LocalLLMUnavailable, match=LOCAL_LLM_TIMEOUT_MESSAGE):
         proofread_text("hello", settings=AppSettings(ollama_timeout=0.1))
 
 
@@ -124,3 +129,33 @@ def test_ollama_backend_uses_profile_system_message_settings(monkeypatch):
     assert "Use concise product-release language." in captured["payload"]["prompt"]
     assert "Return the corrected text followed by a concise explanation" in captured["payload"]["prompt"]
     assert "You may adjust tone" in captured["payload"]["prompt"]
+
+
+def test_ollama_backend_rejects_empty_input_before_request(monkeypatch):
+    def fake_urlopen(request, timeout):
+        raise AssertionError("empty text should not be sent to Ollama")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    with pytest.raises(EmptyProofreadingInput, match=EMPTY_INPUT_MESSAGE):
+        proofread_text("   ", settings=AppSettings(ollama_timeout=0.1))
+
+
+def test_ollama_backend_reports_missing_model(monkeypatch):
+    def fake_urlopen(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 404, "model not found", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    with pytest.raises(LocalLLMUnavailable, match=LOCAL_LLM_MISSING_MODEL_MESSAGE):
+        proofread_text("hello", settings=AppSettings(ollama_model="missing-model"))
+
+
+def test_ollama_backend_reports_empty_llm_response(monkeypatch):
+    def fake_urlopen(request, timeout):
+        return FakeResponse({"response": "  "})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    with pytest.raises(LocalLLMUnavailable, match=EMPTY_RESPONSE_MESSAGE):
+        proofread_text("hello", settings=AppSettings())

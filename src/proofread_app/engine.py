@@ -14,7 +14,11 @@ from .profiles import DEFAULT_TEMPERATURE, ProofreadingProfile, find_profile
 from .prompt_builder import build_prompt
 from .settings import AppSettings
 
-LOCAL_LLM_UNAVAILABLE_MESSAGE = "Local LLM is not available. Please start Ollama."
+LOCAL_LLM_UNAVAILABLE_MESSAGE = "Ollama is not running. Start Ollama, then try again."
+LOCAL_LLM_TIMEOUT_MESSAGE = "Ollama took too long to respond. Try a shorter text, a smaller model, or increase the timeout."
+LOCAL_LLM_MISSING_MODEL_MESSAGE = "The selected Ollama model is not installed. Pull the model or choose one that is installed."
+EMPTY_INPUT_MESSAGE = "Add text before proofreading."
+EMPTY_RESPONSE_MESSAGE = "Ollama returned an empty response. Try again, or choose a different model."
 
 
 class LocalLLMUnavailable(RuntimeError):
@@ -23,6 +27,10 @@ class LocalLLMUnavailable(RuntimeError):
 
 class LocalLLMConfigurationError(ValueError):
     """Raised when local LLM settings would send text outside the machine."""
+
+
+class EmptyProofreadingInput(ValueError):
+    """Raised when proofreading is requested without any text."""
 
 
 class ProofreadingBackend(Protocol):
@@ -39,6 +47,9 @@ class OllamaBackend:
     settings: AppSettings
 
     def proofread(self, text: str, profile: str | ProofreadingProfile) -> str:
+        if not text.strip():
+            raise EmptyProofreadingInput(EMPTY_INPUT_MESSAGE)
+
         settings = self.settings.normalized()
         endpoint = _validate_local_endpoint(settings.ollama_endpoint)
         selected_profile = _resolve_profile(profile)
@@ -58,14 +69,24 @@ class OllamaBackend:
         try:
             with urllib.request.urlopen(request, timeout=settings.ollama_timeout) as response:
                 response_payload = json.loads(response.read().decode("utf-8"))
-        except (TimeoutError, socket.timeout, ConnectionError, urllib.error.URLError) as exc:
+        except (TimeoutError, socket.timeout) as exc:
+            raise LocalLLMUnavailable(LOCAL_LLM_TIMEOUT_MESSAGE) from exc
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise LocalLLMUnavailable(f"{LOCAL_LLM_MISSING_MODEL_MESSAGE} Model: {settings.ollama_model}") from exc
+            raise LocalLLMUnavailable(_http_error_message(exc)) from exc
+        except urllib.error.URLError as exc:
+            if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+                raise LocalLLMUnavailable(LOCAL_LLM_TIMEOUT_MESSAGE) from exc
+            raise LocalLLMUnavailable(LOCAL_LLM_UNAVAILABLE_MESSAGE) from exc
+        except ConnectionError as exc:
             raise LocalLLMUnavailable(LOCAL_LLM_UNAVAILABLE_MESSAGE) from exc
         except json.JSONDecodeError as exc:
-            raise LocalLLMUnavailable("Local LLM returned an unreadable response.") from exc
+            raise LocalLLMUnavailable("Ollama returned an unreadable response. Try again, or restart Ollama.") from exc
 
         result = str(response_payload.get("response", "")).strip()
         if not result:
-            raise LocalLLMUnavailable("Local LLM returned an empty response.")
+            raise LocalLLMUnavailable(EMPTY_RESPONSE_MESSAGE)
         return result
 
 
@@ -98,3 +119,10 @@ def _validate_local_endpoint(endpoint: str) -> str:
         raise LocalLLMConfigurationError("Ollama endpoint must point to localhost to keep text processing offline.")
 
     return endpoint.rstrip("/")
+
+
+def _http_error_message(exc: urllib.error.HTTPError) -> str:
+    details = exc.reason or exc.msg
+    if details:
+        return f"Ollama returned an error ({exc.code}): {details}"
+    return f"Ollama returned an error ({exc.code})."
