@@ -43,6 +43,37 @@ $env:PYTHONPATH = "src"
 python -m proofread_app
 ```
 
+
+## Build a Windows EXE
+
+You need the project files only on the Windows machine that builds the EXE. The easiest options are:
+
+- Download the repository ZIP from GitHub, extract it, and open a terminal in the extracted folder.
+- Or clone the repository with Git:
+
+```bat
+git clone <repository-url>
+cd Proofread_App
+```
+
+You do not need the project folder on every computer that runs the app. After the EXE is built, copy only `dist\Proofread App.exe` to the Windows machine where you want to use it. Python is required only on the build machine; Ollama must still be installed and running on the machine that runs the EXE.
+
+From the repository folder, run this in a normal Command Prompt or PowerShell window. You do not need to run it as Administrator:
+
+```bat
+build_windows_exe.bat
+```
+
+The script changes into the project folder, creates an isolated `.venv-build` environment, installs PyInstaller, saves a build log to `build\build_windows_exe.log`, and writes the executable to:
+
+```text
+dist\Proofread App.exe
+```
+
+To test the EXE, make sure Ollama is running, then double-click `dist\Proofread App.exe`. If Windows SmartScreen appears, choose **More info** and **Run anyway** for your own unsigned local build.
+
+If the script finishes but you do not see `dist\Proofread App.exe`, open `build\build_windows_exe.log` and check the final error message. Older versions could place `dist` under the terminal's current directory when run from an elevated prompt; the current script always writes to the repository's `dist` folder and pauses so you can read the result before the window closes.
+
 ## UI
 
 - Input text area for pasted or typed text.
