@@ -5,6 +5,7 @@ import pytest
 from proofread_app.profiles import (
     ProfileError,
     ProofreadingProfile,
+    default_profiles_dir,
     delete_profile,
     export_profile,
     import_profile,
@@ -107,3 +108,10 @@ def test_load_profiles_falls_back_to_defaults_when_all_files_are_invalid(tmp_pat
     }
     assert any("built-in default profiles" in error for error in result.errors)
     assert invalid_path.exists()
+
+
+def test_default_profiles_dir_uses_windows_appdata_when_available(monkeypatch, tmp_path):
+    appdata = tmp_path / "AppData" / "Roaming"
+    monkeypatch.setenv("APPDATA", str(appdata))
+
+    assert default_profiles_dir() == appdata / "Proofread App" / "profiles"

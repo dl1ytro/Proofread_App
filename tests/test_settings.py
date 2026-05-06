@@ -8,6 +8,7 @@ from proofread_app.settings import (
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_OLLAMA_TIMEOUT,
     SettingsError,
+    default_settings_path,
     load_settings,
     parse_settings,
     save_settings,
@@ -37,3 +38,10 @@ def test_parse_settings_validates_timeout():
 
     with pytest.raises(SettingsError, match="greater than zero"):
         parse_settings("http://localhost:11434", "llama3.2:3b", "0")
+
+
+def test_default_settings_path_uses_windows_appdata_when_available(monkeypatch, tmp_path):
+    appdata = tmp_path / "AppData" / "Roaming"
+    monkeypatch.setenv("APPDATA", str(appdata))
+
+    assert default_settings_path() == appdata / "Proofread App" / "settings.json"
