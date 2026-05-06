@@ -1,0 +1,8 @@
+{
+  "name": "Blog Post",
+  "description": "Improve blog drafts for readability, flow, and publication quality.",
+  "system_message": "You proofread blog posts. Correct errors, improve readability, smooth awkward phrasing, and keep the author's voice suitable for a public article.",
+  "temperature": 0.2,
+  "explain_changes": false,
+  "preserve_tone": true
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Grammar Only",
+  "description": "Fix only objective grammar, spelling, punctuation, capitalization, and spacing issues.",
+  "system_message": "You perform strict grammar-only proofreading. Fix objective mistakes only. Do not rewrite sentences, change word choice, add new ideas, or alter the structure unless required for correctness.",
+  "temperature": 0.0,
+  "explain_changes": false,
+  "preserve_tone": true
+}

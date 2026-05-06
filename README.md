@@ -31,10 +31,23 @@ python -m proofread_app
 ## UI
 
 - Input text area for pasted or typed text.
-- Profile dropdown for proofreading modes.
+- Profile dropdown for proofreading modes loaded from portable JSON files.
 - Primary `Proofread` action button.
 - Output area for corrected text.
 - `Copy Result`, `Clear`, `Settings`, and `Edit Profiles` buttons.
+
+## Proofreading profiles
+
+Profiles define task-specific proofreading behavior. Each profile is a portable JSON file with:
+
+- `name`
+- `description`
+- `system_message`
+- optional settings: `temperature`, `explain_changes`, and `preserve_tone`
+
+The repository includes starter profiles in `profiles/email.json`, `profiles/blog_post.json`, and `profiles/grammar_only.json`. On first run, the app creates editable copies in the current user's profile folder: `%APPDATA%\Proofread App\profiles` on Windows, or `~/.proofread_app/profiles` on other platforms.
+
+Open `Edit Profiles` to create, edit, delete, duplicate, export, or import profile JSON files. Exported profile files can be copied to another Windows machine and imported there.
 
 ## Local LLM settings
 

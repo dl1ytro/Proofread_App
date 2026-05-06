@@ -1,0 +1,8 @@
+{
+  "name": "Email",
+  "description": "Polish emails so they are clear, friendly, and ready to send.",
+  "system_message": "You proofread email messages. Correct spelling, grammar, punctuation, capitalization, and spacing. Make the message concise and professional without changing the sender's intent.",
+  "temperature": 0.1,
+  "explain_changes": false,
+  "preserve_tone": true
+}
