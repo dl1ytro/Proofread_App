@@ -64,7 +64,7 @@ From the repository folder, run this in a normal Command Prompt or PowerShell wi
 build_windows_exe.bat
 ```
 
-The script changes into the project folder, creates an isolated `.venv-build` environment, installs PyInstaller, and writes the executable to:
+The script changes into the project folder, creates an isolated `.venv-build` environment, installs PyInstaller, saves a build log to `build\build_windows_exe.log`, and writes the executable to:
 
 ```text
 dist\Proofread App.exe
@@ -72,7 +72,7 @@ dist\Proofread App.exe
 
 To test the EXE, make sure Ollama is running, then double-click `dist\Proofread App.exe`. If Windows SmartScreen appears, choose **More info** and **Run anyway** for your own unsigned local build.
 
-If the script finishes but you do not see `dist\Proofread App.exe`, re-run the latest script from the project folder and read the final error message. Older versions could place `dist` under the terminal's current directory when run from an elevated prompt; the current script always writes to the repository's `dist` folder.
+If the script finishes but you do not see `dist\Proofread App.exe`, open `build\build_windows_exe.log` and check the final error message. Older versions could place `dist` under the terminal's current directory when run from an elevated prompt; the current script always writes to the repository's `dist` folder and pauses so you can read the result before the window closes.
 
 ## UI
 
