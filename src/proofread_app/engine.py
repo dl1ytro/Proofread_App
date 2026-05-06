@@ -11,6 +11,7 @@ from typing import Protocol
 from urllib.parse import urlparse
 
 from .profiles import DEFAULT_TEMPERATURE, ProofreadingProfile, find_profile
+from .prompt_builder import build_prompt
 from .settings import AppSettings
 
 LOCAL_LLM_UNAVAILABLE_MESSAGE = "Local LLM is not available. Please start Ollama."
@@ -43,7 +44,7 @@ class OllamaBackend:
         selected_profile = _resolve_profile(profile)
         payload = {
             "model": settings.ollama_model,
-            "prompt": _build_prompt(text, selected_profile),
+            "prompt": build_prompt(text, selected_profile),
             "stream": False,
             "options": {"temperature": _profile_temperature(selected_profile)},
         }
@@ -75,28 +76,6 @@ def proofread_text(
 
     backend = OllamaBackend(settings or AppSettings())
     return backend.proofread(text, profile)
-
-
-def _build_prompt(text: str, profile: ProofreadingProfile) -> str:
-    response_instruction = (
-        "Return the corrected text followed by a concise explanation of the changes."
-        if profile.explain_changes
-        else "Return only the corrected text."
-    )
-    tone_instruction = (
-        "Preserve the user's tone and meaning." if profile.preserve_tone else "You may adjust tone when it improves the result."
-    )
-    return (
-        "You are an offline proofreading assistant running locally in Ollama. "
-        f"{profile.system_message} "
-        f"{tone_instruction} "
-        "Do not add new facts or change the user's intent. "
-        f"{response_instruction}\n\n"
-        f"Profile: {profile.name}\n"
-        f"Profile guidance: {profile.description}\n\n"
-        "Text to proofread:\n"
-        f"{text}"
-    )
 
 
 def _resolve_profile(profile: str | ProofreadingProfile) -> ProofreadingProfile:

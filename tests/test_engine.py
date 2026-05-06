@@ -52,7 +52,7 @@ def test_ollama_backend_posts_to_local_generate_endpoint(monkeypatch):
     assert captured["payload"]["model"] == "llama3.2:3b"
     assert captured["payload"]["stream"] is False
     assert captured["payload"]["options"] == {"temperature": 0.1}
-    assert "Return only the corrected text." in captured["payload"]["prompt"]
+    assert "Return only the corrected text unless the profile requests explanations." in captured["payload"]["prompt"]
     assert "teh quick fox jumps" in captured["payload"]["prompt"]
 
 
