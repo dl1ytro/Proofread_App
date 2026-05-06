@@ -6,7 +6,6 @@ import json
 import os
 import re
 import shutil
-import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -54,7 +53,9 @@ class ProofreadingProfile:
             try:
                 temperature = float(temperature)
             except (TypeError, ValueError) as exc:
-                raise ProfileError("Temperature must be a number between 0 and 2.") from exc
+                raise ProfileError(
+                    "Temperature must be a number between 0 and 2."
+                ) from exc
             if not 0 <= temperature <= 2:
                 raise ProfileError("Temperature must be between 0 and 2.")
 
@@ -129,7 +130,9 @@ def slugify_profile_name(name: str) -> str:
 def profile_path(profile: ProofreadingProfile, directory: Path | None = None) -> Path:
     """Return the default JSON path for *profile* in *directory*."""
 
-    return (directory or default_profiles_dir()) / f"{slugify_profile_name(profile.name)}.json"
+    return (
+        directory or default_profiles_dir()
+    ) / f"{slugify_profile_name(profile.name)}.json"
 
 
 def ensure_default_profiles(directory: Path | None = None) -> None:
@@ -165,9 +168,13 @@ def load_profiles_with_errors(directory: Path | None = None) -> ProfileLoadResul
     if not profiles:
         profiles = [profile.normalized() for profile in DEFAULT_PROFILES]
         if errors:
-            errors.append("Using built-in default profiles until profile files are fixed.")
+            errors.append(
+                "Using built-in default profiles until profile files are fixed."
+            )
 
-    default_order = {profile.name.casefold(): index for index, profile in enumerate(DEFAULT_PROFILES)}
+    default_order = {
+        profile.name.casefold(): index for index, profile in enumerate(DEFAULT_PROFILES)
+    }
     profiles = sorted(
         profiles,
         key=lambda profile: (
@@ -185,7 +192,9 @@ def load_profile(path: Path) -> ProofreadingProfile:
         with path.open("r", encoding="utf-8") as profile_file:
             payload = json.load(profile_file)
     except json.JSONDecodeError as exc:
-        raise ProfileError("Profile file is invalid JSON. Fix or restore it from backup; it was not changed.") from exc
+        raise ProfileError(
+            "Profile file is invalid JSON. Fix or restore it from an exported copy; it was not changed."
+        ) from exc
     if not isinstance(payload, dict):
         raise ProfileError("Profile file must contain a JSON object.")
     return profile_from_dict(payload).normalized()
@@ -204,7 +213,9 @@ def profile_from_dict(payload: dict[str, object]) -> ProofreadingProfile:
     )
 
 
-def save_profile(profile: ProofreadingProfile, directory: Path | None = None) -> ProofreadingProfile:
+def save_profile(
+    profile: ProofreadingProfile, directory: Path | None = None
+) -> ProofreadingProfile:
     """Save *profile* as a portable JSON file and return the normalized profile."""
 
     normalized = profile.normalized()
@@ -225,28 +236,6 @@ def delete_profile(name: str, directory: Path | None = None) -> None:
     path = (directory or default_profiles_dir()) / f"{slugify_profile_name(name)}.json"
     if path.exists():
         path.unlink()
-
-
-def duplicate_profile(profile: ProofreadingProfile, directory: Path | None = None) -> ProofreadingProfile:
-    """Create and save a copy of *profile* with a unique name."""
-
-    profiles_dir = directory or default_profiles_dir()
-    existing_names = {loaded.name.casefold() for loaded in load_profiles(profiles_dir)}
-    base_name = f"{profile.name} Copy"
-    candidate = base_name
-    suffix = 2
-    while candidate.casefold() in existing_names:
-        candidate = f"{base_name} {suffix}"
-        suffix += 1
-    duplicate = ProofreadingProfile(
-        name=candidate,
-        description=profile.description,
-        system_message=profile.system_message,
-        temperature=profile.temperature,
-        explain_changes=profile.explain_changes,
-        preserve_tone=profile.preserve_tone,
-    )
-    return save_profile(duplicate, profiles_dir)
 
 
 def export_profile(profile: ProofreadingProfile, destination: Path) -> Path:
@@ -273,29 +262,15 @@ def import_profile(source: Path, directory: Path | None = None) -> ProofreadingP
     return saved
 
 
-def backup_profiles(destination: Path, directory: Path | None = None) -> Path:
-    """Back up every local profile JSON file into a portable zip archive."""
-
-    profiles_dir = directory or default_profiles_dir()
-    ensure_default_profiles(profiles_dir)
-    profile_files = sorted(profiles_dir.glob("*.json"))
-    if not profile_files:
-        raise ProfileError("No profile JSON files are available to back up.")
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as backup_file:
-        for profile_file in profile_files:
-            backup_file.write(profile_file, arcname=profile_file.name)
-    return destination
-
-
 def profile_names(profiles: list[ProofreadingProfile] | None = None) -> list[str]:
     """Return profile names in UI order."""
 
     return [profile.name for profile in (profiles or list(DEFAULT_PROFILES))]
 
 
-def profile_description(name: str, profiles: list[ProofreadingProfile] | None = None) -> str:
+def profile_description(
+    name: str, profiles: list[ProofreadingProfile] | None = None
+) -> str:
     """Return a profile description, defaulting to the first profile for unknown names."""
 
     available = profiles or list(DEFAULT_PROFILES)
@@ -305,7 +280,9 @@ def profile_description(name: str, profiles: list[ProofreadingProfile] | None = 
     return available[0].description if available else ""
 
 
-def find_profile(name: str, profiles: list[ProofreadingProfile] | None = None) -> ProofreadingProfile:
+def find_profile(
+    name: str, profiles: list[ProofreadingProfile] | None = None
+) -> ProofreadingProfile:
     """Return the named profile, defaulting to the first profile when not found."""
 
     available = profiles or load_profiles()

@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import os
-import platform
-import subprocess
 import threading
 import tkinter as tk
-from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -22,10 +18,8 @@ from .engine import (
 from .profiles import (
     ProfileError,
     ProofreadingProfile,
-    backup_profiles,
     default_profiles_dir,
     delete_profile,
-    duplicate_profile,
     export_profile,
     import_profile,
     load_profiles_with_errors,
@@ -38,19 +32,6 @@ from .profiles import (
 from .settings import SettingsError, load_settings, parse_settings, save_settings
 
 WINDOW_TITLE = "Proofread App"
-
-
-def open_folder(path: Path) -> None:
-    """Open *path* in the operating system file manager."""
-
-    path.mkdir(parents=True, exist_ok=True)
-    if os.name == "nt":
-        os.startfile(path)  # type: ignore[attr-defined]
-        return
-    if platform.system() == "Darwin":
-        subprocess.Popen(["open", str(path)])
-        return
-    subprocess.Popen(["xdg-open", str(path)])
 
 
 class ProofreadApp(tk.Tk):
@@ -68,7 +49,9 @@ class ProofreadApp(tk.Tk):
         self.profile_errors = profile_load.errors
         self.profile_var = tk.StringVar(value=self.profiles[0].name)
         self.status_var = tk.StringVar(value="Ready")
-        self.description_var = tk.StringVar(value=profile_description(self.profile_var.get(), self.profiles))
+        self.description_var = tk.StringVar(
+            value=profile_description(self.profile_var.get(), self.profiles)
+        )
         self.settings = load_settings()
         self._closing = False
         self._proofread_request_id = 0
@@ -87,10 +70,16 @@ class ProofreadApp(tk.Tk):
         self.option_add("*Font", ("Segoe UI", 10))
         self.style.configure("App.TFrame", background="#f3f4f6")
         self.style.configure("Card.TFrame", background="#ffffff", relief="flat")
-        self.style.configure("Title.TLabel", background="#f3f4f6", font=("Segoe UI Semibold", 18))
+        self.style.configure(
+            "Title.TLabel", background="#f3f4f6", font=("Segoe UI Semibold", 18)
+        )
         self.style.configure("Hint.TLabel", background="#ffffff", foreground="#4b5563")
-        self.style.configure("Status.TLabel", background="#f3f4f6", foreground="#4b5563")
-        self.style.configure("Primary.TButton", font=("Segoe UI Semibold", 10), padding=(18, 8))
+        self.style.configure(
+            "Status.TLabel", background="#f3f4f6", foreground="#4b5563"
+        )
+        self.style.configure(
+            "Primary.TButton", font=("Segoe UI Semibold", 10), padding=(18, 8)
+        )
         self.style.configure("Secondary.TButton", padding=(14, 7))
 
     def _build_layout(self) -> None:
@@ -101,7 +90,9 @@ class ProofreadApp(tk.Tk):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
-        ttk.Label(shell, text="Proofread App", style="Title.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(shell, text="Proofread App", style="Title.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
         ttk.Label(
             shell,
             text="Paste text, choose a profile, and proofread with your local Ollama model.",
@@ -123,36 +114,46 @@ class ProofreadApp(tk.Tk):
         footer = ttk.Frame(shell, style="App.TFrame")
         footer.grid(row=3, column=0, sticky="ew", pady=(16, 0))
         footer.columnconfigure(0, weight=1)
-        ttk.Label(footer, textvariable=self.status_var, style="Status.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Button(footer, text="Copy Result", command=self.copy_result, style="Secondary.TButton").grid(
-            row=0, column=1, padx=(8, 0)
+        ttk.Label(footer, textvariable=self.status_var, style="Status.TLabel").grid(
+            row=0, column=0, sticky="w"
         )
-        ttk.Button(footer, text="Clear", command=self.clear_text, style="Secondary.TButton").grid(
-            row=0, column=2, padx=(8, 0)
-        )
-        ttk.Button(footer, text="Settings", command=self.show_settings, style="Secondary.TButton").grid(
-            row=0, column=3, padx=(8, 0)
-        )
-        ttk.Button(footer, text="Edit Profiles", command=self.show_profiles, style="Secondary.TButton").grid(
-            row=0, column=4, padx=(8, 0)
-        )
+        ttk.Button(
+            footer,
+            text="Copy Result",
+            command=self.copy_result,
+            style="Secondary.TButton",
+        ).grid(row=0, column=1, padx=(8, 0))
+        ttk.Button(
+            footer,
+            text="Settings",
+            command=self.show_settings,
+            style="Secondary.TButton",
+        ).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(
+            footer,
+            text="Edit Profiles",
+            command=self.show_profiles,
+            style="Secondary.TButton",
+        ).grid(row=0, column=3, padx=(8, 0))
 
     def _build_input_card(self, parent: ttk.Frame) -> ttk.Frame:
         card = ttk.Frame(parent, padding=16, style="Card.TFrame")
         card.columnconfigure(0, weight=1)
         card.rowconfigure(3, weight=1)
 
-        ttk.Label(card, text="Input", background="#ffffff", font=("Segoe UI Semibold", 12)).grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(card, text="Type or paste the text to correct.", style="Hint.TLabel").grid(
-            row=1, column=0, sticky="w", pady=(2, 12)
-        )
+        ttk.Label(
+            card, text="Input", background="#ffffff", font=("Segoe UI Semibold", 12)
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            card, text="Type or paste the text to correct.", style="Hint.TLabel"
+        ).grid(row=1, column=0, sticky="w", pady=(2, 12))
 
         controls = ttk.Frame(card, style="Card.TFrame")
         controls.grid(row=2, column=0, sticky="ew", pady=(0, 12))
         controls.columnconfigure(1, weight=1)
-        ttk.Label(controls, text="Profile", background="#ffffff").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ttk.Label(controls, text="Profile", background="#ffffff").grid(
+            row=0, column=0, sticky="w", padx=(0, 8)
+        )
         self.profile_menu = ttk.Combobox(
             controls,
             textvariable=self.profile_var,
@@ -162,12 +163,17 @@ class ProofreadApp(tk.Tk):
         )
         self.profile_menu.grid(row=0, column=1, sticky="w")
         self.profile_menu.bind("<<ComboboxSelected>>", self._update_profile_description)
-        self.proofread_button = ttk.Button(controls, text="Proofread", command=self.run_proofread, style="Primary.TButton")
+        self.proofread_button = ttk.Button(
+            controls,
+            text="Proofread",
+            command=self.run_proofread,
+            style="Primary.TButton",
+        )
         self.proofread_button.grid(row=0, column=2, sticky="e")
 
-        ttk.Label(card, textvariable=self.description_var, style="Hint.TLabel", wraplength=360).grid(
-            row=3, column=0, sticky="new", pady=(0, 8)
-        )
+        ttk.Label(
+            card, textvariable=self.description_var, style="Hint.TLabel", wraplength=360
+        ).grid(row=3, column=0, sticky="new", pady=(0, 8))
 
         text_frame = ttk.Frame(card, style="Card.TFrame")
         text_frame.grid(row=4, column=0, sticky="nsew")
@@ -196,12 +202,17 @@ class ProofreadApp(tk.Tk):
         card.columnconfigure(0, weight=1)
         card.rowconfigure(2, weight=1)
 
-        ttk.Label(card, text="Corrected version", background="#ffffff", font=("Segoe UI Semibold", 12)).grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(card, text="Review the result, then copy it when ready.", style="Hint.TLabel").grid(
-            row=1, column=0, sticky="w", pady=(2, 12)
-        )
+        ttk.Label(
+            card,
+            text="Corrected version",
+            background="#ffffff",
+            font=("Segoe UI Semibold", 12),
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            card,
+            text="Review the result, then copy it when ready.",
+            style="Hint.TLabel",
+        ).grid(row=1, column=0, sticky="w", pady=(2, 12))
 
         text_frame = ttk.Frame(card, style="Card.TFrame")
         text_frame.grid(row=2, column=0, sticky="nsew")
@@ -225,7 +236,9 @@ class ProofreadApp(tk.Tk):
         return card
 
     def _update_profile_description(self, _event: tk.Event | None = None) -> None:
-        self.description_var.set(profile_description(self.profile_var.get(), self.profiles))
+        self.description_var.set(
+            profile_description(self.profile_var.get(), self.profiles)
+        )
 
     def _show_profile_load_errors(self) -> None:
         message = "One or more profile files could not be loaded. They were left unchanged, and your other profiles are still available."
@@ -274,16 +287,24 @@ class ProofreadApp(tk.Tk):
         def worker() -> None:
             try:
                 result = proofread_text(source, profile, settings)
-            except (EmptyProofreadingInput, LocalLLMUnavailable, LocalLLMConfigurationError) as exc:
+            except (
+                EmptyProofreadingInput,
+                LocalLLMUnavailable,
+                LocalLLMConfigurationError,
+            ) as exc:
                 self._schedule_proofread_result(request_id, None, exc)
-            except Exception as exc:  # noqa: BLE001 - keep the UI reliable for unexpected local backend failures.
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 - keep the UI reliable for unexpected local backend failures.
                 self._schedule_proofread_result(request_id, None, exc)
             else:
                 self._schedule_proofread_result(request_id, result, None)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _schedule_proofread_result(self, request_id: int, result: str | None, error: Exception | None) -> None:
+    def _schedule_proofread_result(
+        self, request_id: int, result: str | None, error: Exception | None
+    ) -> None:
         if self._closing:
             return
         try:
@@ -291,7 +312,9 @@ class ProofreadApp(tk.Tk):
         except tk.TclError:
             pass
 
-    def _finish_proofread(self, request_id: int, result: str | None, error: Exception | None) -> None:
+    def _finish_proofread(
+        self, request_id: int, result: str | None, error: Exception | None
+    ) -> None:
         if self._closing or request_id != self._proofread_request_id:
             return
         self._proofread_in_progress = False
@@ -318,7 +341,9 @@ class ProofreadApp(tk.Tk):
 
         self.output_text.delete("1.0", "end")
         self.output_text.insert("1.0", result or "")
-        self.status_var.set(f"Proofread offline with {self.settings.ollama_model} using {self.profile_var.get()} profile.")
+        self.status_var.set(
+            f"Proofread offline with {self.settings.ollama_model} using {self.profile_var.get()} profile."
+        )
 
     def copy_result(self) -> None:
         result = self.output_text.get("1.0", "end-1c")
@@ -328,12 +353,6 @@ class ProofreadApp(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(result)
         self.status_var.set("Result copied to clipboard.")
-
-    def clear_text(self) -> None:
-        self.input_text.delete("1.0", "end")
-        self.output_text.delete("1.0", "end")
-        self.status_var.set("Cleared input and output.")
-        self.input_text.focus_set()
 
     def show_settings(self) -> None:
         """Open a settings dialog for the local Ollama backend."""
@@ -353,9 +372,12 @@ class ProofreadApp(tk.Tk):
         frame.grid(row=0, column=0, sticky="nsew")
         frame.columnconfigure(1, weight=1)
 
-        ttk.Label(frame, text="Local LLM settings", background="#ffffff", font=("Segoe UI Semibold", 12)).grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
-        )
+        ttk.Label(
+            frame,
+            text="Local LLM settings",
+            background="#ffffff",
+            font=("Segoe UI Semibold", 12),
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
         ttk.Label(
             frame,
             text="Proofreading requests are sent only to the local Ollama endpoint below.",
@@ -363,21 +385,35 @@ class ProofreadApp(tk.Tk):
             wraplength=360,
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 12))
 
-        ttk.Label(frame, text="Ollama endpoint", background="#ffffff").grid(row=2, column=0, sticky="w", pady=(0, 6))
-        ttk.Entry(frame, textvariable=endpoint_var, width=38).grid(row=2, column=1, sticky="ew", pady=(0, 6))
+        ttk.Label(frame, text="Ollama endpoint", background="#ffffff").grid(
+            row=2, column=0, sticky="w", pady=(0, 6)
+        )
+        ttk.Entry(frame, textvariable=endpoint_var, width=38).grid(
+            row=2, column=1, sticky="ew", pady=(0, 6)
+        )
 
-        ttk.Label(frame, text="Model name", background="#ffffff").grid(row=3, column=0, sticky="w", pady=(0, 6))
-        ttk.Entry(frame, textvariable=model_var, width=38).grid(row=3, column=1, sticky="ew", pady=(0, 6))
+        ttk.Label(frame, text="Model name", background="#ffffff").grid(
+            row=3, column=0, sticky="w", pady=(0, 6)
+        )
+        ttk.Entry(frame, textvariable=model_var, width=38).grid(
+            row=3, column=1, sticky="ew", pady=(0, 6)
+        )
 
-        ttk.Label(frame, text="Timeout (seconds)", background="#ffffff").grid(row=4, column=0, sticky="w", pady=(0, 12))
-        ttk.Entry(frame, textvariable=timeout_var, width=38).grid(row=4, column=1, sticky="ew", pady=(0, 12))
+        ttk.Label(frame, text="Timeout (seconds)", background="#ffffff").grid(
+            row=4, column=0, sticky="w", pady=(0, 12)
+        )
+        ttk.Entry(frame, textvariable=timeout_var, width=38).grid(
+            row=4, column=1, sticky="ew", pady=(0, 12)
+        )
 
         buttons = ttk.Frame(frame, style="Card.TFrame")
         buttons.grid(row=5, column=0, columnspan=2, sticky="e")
 
         def save() -> None:
             try:
-                parsed = parse_settings(endpoint_var.get(), model_var.get(), timeout_var.get())
+                parsed = parse_settings(
+                    endpoint_var.get(), model_var.get(), timeout_var.get()
+                )
                 self.settings = save_settings(parsed)
             except SettingsError as exc:
                 messagebox.showerror("Settings error", str(exc), parent=dialog)
@@ -385,10 +421,12 @@ class ProofreadApp(tk.Tk):
             self.status_var.set("Settings saved for local Ollama.")
             dialog.destroy()
 
-        ttk.Button(buttons, text="Cancel", command=dialog.destroy, style="Secondary.TButton").grid(
-            row=0, column=0, padx=(0, 8)
+        ttk.Button(
+            buttons, text="Cancel", command=dialog.destroy, style="Secondary.TButton"
+        ).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(buttons, text="Save", command=save, style="Primary.TButton").grid(
+            row=0, column=1
         )
-        ttk.Button(buttons, text="Save", command=save, style="Primary.TButton").grid(row=0, column=1)
         dialog.wait_window()
 
     def show_profiles(self) -> None:
@@ -414,12 +452,15 @@ class ProofreadApp(tk.Tk):
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(2, weight=1)
 
-        ttk.Label(frame, text="Proofreading profiles", background="#ffffff", font=("Segoe UI Semibold", 12)).grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=(0, 4)
-        )
         ttk.Label(
             frame,
-            text="Profiles are simple local JSON files that can be exported, imported, backed up, or copied to another machine.",
+            text="Proofreading profiles",
+            background="#ffffff",
+            font=("Segoe UI Semibold", 12),
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        ttk.Label(
+            frame,
+            text="Profiles are simple local JSON files that can be edited, exported, imported, or copied to another machine.",
             style="Hint.TLabel",
             wraplength=720,
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 12))
@@ -438,28 +479,46 @@ class ProofreadApp(tk.Tk):
         editor.columnconfigure(1, weight=1)
         editor.rowconfigure(2, weight=1)
 
-        ttk.Label(editor, text="Name", background="#ffffff").grid(row=0, column=0, sticky="w", pady=(0, 6))
-        ttk.Entry(editor, textvariable=name_var).grid(row=0, column=1, sticky="ew", pady=(0, 6))
+        ttk.Label(editor, text="Name", background="#ffffff").grid(
+            row=0, column=0, sticky="w", pady=(0, 6)
+        )
+        ttk.Entry(editor, textvariable=name_var).grid(
+            row=0, column=1, sticky="ew", pady=(0, 6)
+        )
 
-        ttk.Label(editor, text="Description", background="#ffffff").grid(row=1, column=0, sticky="nw", pady=(0, 6))
-        description_text = tk.Text(editor, height=3, wrap="word", borderwidth=1, relief="solid", padx=8, pady=6)
+        ttk.Label(editor, text="Description", background="#ffffff").grid(
+            row=1, column=0, sticky="nw", pady=(0, 6)
+        )
+        description_text = tk.Text(
+            editor, height=3, wrap="word", borderwidth=1, relief="solid", padx=8, pady=6
+        )
         description_text.grid(row=1, column=1, sticky="ew", pady=(0, 6))
 
-        ttk.Label(editor, text="System message", background="#ffffff").grid(row=2, column=0, sticky="nw", pady=(0, 6))
-        system_text = tk.Text(editor, height=8, wrap="word", borderwidth=1, relief="solid", padx=8, pady=6)
+        ttk.Label(editor, text="System message", background="#ffffff").grid(
+            row=2, column=0, sticky="nw", pady=(0, 6)
+        )
+        system_text = tk.Text(
+            editor, height=8, wrap="word", borderwidth=1, relief="solid", padx=8, pady=6
+        )
         system_text.grid(row=2, column=1, sticky="nsew", pady=(0, 6))
 
-        ttk.Label(editor, text="Temperature", background="#ffffff").grid(row=3, column=0, sticky="w", pady=(0, 6))
-        ttk.Entry(editor, textvariable=temperature_var, width=12).grid(row=3, column=1, sticky="w", pady=(0, 6))
+        ttk.Label(editor, text="Temperature", background="#ffffff").grid(
+            row=3, column=0, sticky="w", pady=(0, 6)
+        )
+        ttk.Entry(editor, textvariable=temperature_var, width=12).grid(
+            row=3, column=1, sticky="w", pady=(0, 6)
+        )
 
         ttk.Checkbutton(editor, text="Explain changes", variable=explain_var).grid(
             row=4, column=1, sticky="w", pady=(0, 4)
         )
-        ttk.Checkbutton(editor, text="Preserve tone", variable=preserve_var).grid(row=5, column=1, sticky="w")
+        ttk.Checkbutton(editor, text="Preserve tone", variable=preserve_var).grid(
+            row=5, column=1, sticky="w"
+        )
 
         action_bar = ttk.Frame(frame, style="Card.TFrame")
         action_bar.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(14, 0))
-        action_bar.columnconfigure(8, weight=1)
+        action_bar.columnconfigure(6, weight=1)
 
         def refresh_list(select_name: str | None = None) -> None:
             profile_load = load_profiles_with_errors()
@@ -502,7 +561,9 @@ class ProofreadApp(tk.Tk):
             description_text.insert("1.0", profile.description)
             system_text.delete("1.0", "end")
             system_text.insert("1.0", profile.system_message)
-            temperature_var.set("" if profile.temperature is None else str(profile.temperature))
+            temperature_var.set(
+                "" if profile.temperature is None else str(profile.temperature)
+            )
             explain_var.set(profile.explain_changes)
             preserve_var.set(profile.preserve_tone)
 
@@ -527,9 +588,13 @@ class ProofreadApp(tk.Tk):
         def new_profile() -> None:
             name_var.set("New Profile")
             description_text.delete("1.0", "end")
-            description_text.insert("1.0", "Describe when to use this proofreading profile.")
+            description_text.insert(
+                "1.0", "Describe when to use this proofreading profile."
+            )
             system_text.delete("1.0", "end")
-            system_text.insert("1.0", "You proofread the user's text according to this profile's task.")
+            system_text.insert(
+                "1.0", "You proofread the user's text according to this profile's task."
+            )
             temperature_var.set("0.1")
             explain_var.set(False)
             preserve_var.set(True)
@@ -537,12 +602,19 @@ class ProofreadApp(tk.Tk):
             selected_index.set(-1)
 
         def save_current() -> None:
-            old_name = selected_profile().name if selected_index.get() >= 0 and self.profiles else None
+            old_name = (
+                selected_profile().name
+                if selected_index.get() >= 0 and self.profiles
+                else None
+            )
             try:
                 profile = profile_from_fields()
                 saved = save_profile(profile)
                 if old_name and old_name != saved.name:
-                    old_path = default_profiles_dir() / f"{slugify_profile_name(old_name)}.json"
+                    old_path = (
+                        default_profiles_dir()
+                        / f"{slugify_profile_name(old_name)}.json"
+                    )
                     if old_path.resolve() != profile_path(saved).resolve():
                         delete_profile(old_name)
             except (OSError, ProfileError, ValueError) as exc:
@@ -554,22 +626,19 @@ class ProofreadApp(tk.Tk):
         def delete_current() -> None:
             profile = selected_profile()
             if len(self.profiles) <= 1:
-                messagebox.showwarning("Profile required", "At least one profile must remain.", parent=dialog)
+                messagebox.showwarning(
+                    "Profile required",
+                    "At least one profile must remain.",
+                    parent=dialog,
+                )
                 return
-            if not messagebox.askyesno("Delete profile", f"Delete {profile.name}?", parent=dialog):
+            if not messagebox.askyesno(
+                "Delete profile", f"Delete {profile.name}?", parent=dialog
+            ):
                 return
             delete_profile(profile.name)
             self.status_var.set(f"Deleted {profile.name} profile.")
             refresh_list()
-
-        def duplicate_current() -> None:
-            try:
-                copied = duplicate_profile(selected_profile())
-            except ProfileError as exc:
-                messagebox.showerror("Profile error", str(exc), parent=dialog)
-                return
-            self.status_var.set(f"Duplicated {copied.name} profile.")
-            refresh_list(copied.name)
 
         def export_current() -> None:
             profile = selected_profile()
@@ -605,53 +674,25 @@ class ProofreadApp(tk.Tk):
             self.status_var.set(f"Imported {imported.name} profile.")
             refresh_list(imported.name)
 
-        def open_profile_folder() -> None:
-            try:
-                open_folder(default_profiles_dir())
-            except OSError as exc:
-                messagebox.showerror("Profile folder error", str(exc), parent=dialog)
-                return
-            self.status_var.set("Opened profiles folder.")
-
-        def backup_all() -> None:
-            destination = filedialog.asksaveasfilename(
-                parent=dialog,
-                title="Backup all profiles",
-                defaultextension=".zip",
-                initialfile=f"proofread_profiles_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                filetypes=[("Zip archive", "*.zip"), ("All files", "*.*")],
-            )
-            if not destination:
-                return
-            try:
-                backup_path = backup_profiles(Path(destination))
-            except (OSError, ProfileError, ValueError) as exc:
-                messagebox.showerror("Profile backup error", str(exc), parent=dialog)
-                return
-            self.status_var.set(f"Backed up profiles to {backup_path.name}.")
-
         profile_list.bind("<<ListboxSelect>>", on_select)
-        ttk.Button(action_bar, text="New", command=new_profile, style="Secondary.TButton").grid(row=0, column=0, padx=(0, 8))
-        ttk.Button(action_bar, text="Save", command=save_current, style="Primary.TButton").grid(row=0, column=1, padx=(0, 8))
-        ttk.Button(action_bar, text="Delete", command=delete_current, style="Secondary.TButton").grid(
-            row=0, column=2, padx=(0, 8)
-        )
-        ttk.Button(action_bar, text="Duplicate", command=duplicate_current, style="Secondary.TButton").grid(
-            row=0, column=3, padx=(0, 8)
-        )
-        ttk.Button(action_bar, text="Export", command=export_current, style="Secondary.TButton").grid(
-            row=0, column=4, padx=(0, 8)
-        )
-        ttk.Button(action_bar, text="Import", command=import_new, style="Secondary.TButton").grid(
-            row=0, column=5, padx=(0, 8)
-        )
-        ttk.Button(action_bar, text="Open Folder", command=open_profile_folder, style="Secondary.TButton").grid(
-            row=0, column=6, padx=(0, 8)
-        )
-        ttk.Button(action_bar, text="Backup All", command=backup_all, style="Secondary.TButton").grid(
-            row=0, column=7, padx=(0, 8)
-        )
-        ttk.Button(action_bar, text="Close", command=dialog.destroy, style="Secondary.TButton").grid(row=0, column=9)
+        ttk.Button(
+            action_bar, text="New", command=new_profile, style="Secondary.TButton"
+        ).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(
+            action_bar, text="Save", command=save_current, style="Primary.TButton"
+        ).grid(row=0, column=1, padx=(0, 8))
+        ttk.Button(
+            action_bar, text="Delete", command=delete_current, style="Secondary.TButton"
+        ).grid(row=0, column=2, padx=(0, 8))
+        ttk.Button(
+            action_bar, text="Export", command=export_current, style="Secondary.TButton"
+        ).grid(row=0, column=3, padx=(0, 8))
+        ttk.Button(
+            action_bar, text="Import", command=import_new, style="Secondary.TButton"
+        ).grid(row=0, column=4, padx=(0, 8))
+        ttk.Button(
+            action_bar, text="Close", command=dialog.destroy, style="Secondary.TButton"
+        ).grid(row=0, column=7)
 
         refresh_list(self.profile_var.get())
         dialog.wait_window()

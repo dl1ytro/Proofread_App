@@ -1,8 +1,23 @@
 # Proofread App
 
-A lightweight desktop proofreading interface designed for Windows 10 and Windows 11. The UI uses Python's standard `tkinter` toolkit, so it avoids accounts, web views, complex navigation, and unnecessary animations.
+A lightweight desktop proofreading interface designed for Windows 10 and Windows 11. Version 1 is intentionally a small, stable desktop tool. The UI uses Python's standard `tkinter` toolkit, so it avoids accounts, web views, complex navigation, and unnecessary animations.
 
 Proofreading is handled offline through a local Ollama server. The app sends text only to the configured local Ollama endpoint and rejects non-local endpoints so proofreading content is not uploaded to a remote service.
+
+## Version 1 scope
+
+Version 1 includes only the core local proofreading workflow:
+
+1. Text input.
+2. Profile selection.
+3. Local LLM proofreading.
+4. Result output.
+5. Copy result.
+6. Profile editor.
+7. Import/export profiles.
+8. Local model settings.
+
+The first version does not include accounts, cloud features, payments, document management, or complex formatting. Profiles and settings are local files; there is no database, sign-in flow, subscription logic, remote sync, document library, rich-text editor, or advanced layout tooling.
 
 ## Prerequisites
 
@@ -32,9 +47,9 @@ python -m proofread_app
 
 - Input text area for pasted or typed text.
 - Profile dropdown for proofreading modes loaded from portable JSON files.
-- Primary `Proofread` action button.
+- Primary `Proofread` action button for local LLM proofreading.
 - Output area for corrected text.
-- `Copy Result`, `Clear`, `Settings`, and `Edit Profiles` buttons.
+- `Copy Result`, `Settings`, and `Edit Profiles` buttons.
 
 ## Proofreading profiles
 
@@ -47,7 +62,7 @@ Profiles define task-specific proofreading behavior. Each profile is a portable 
 
 The repository includes starter profiles in `profiles/email.json`, `profiles/blog_post.json`, and `profiles/grammar_only.json`. On first run, the app creates editable copies in the current user's profile folder: `%APPDATA%\Proofread App\profiles` on Windows, or `~/.proofread_app/profiles` on other platforms.
 
-Open `Edit Profiles` to create, edit, delete, duplicate, export, or import profile JSON files. The profile manager can also open the local profiles folder and back up every profile JSON file to a `.zip` archive. Exported profile files and backups can be copied to another machine and imported or restored there.
+Open `Edit Profiles` to create, edit, delete, export, or import profile JSON files. Exported profile files can be copied to another machine and imported there.
 
 ## Local LLM settings
 
