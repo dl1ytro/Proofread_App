@@ -12,6 +12,7 @@ from proofread_app.engine import (
     proofread_text,
 )
 from proofread_app.settings import AppSettings
+from proofread_app.profiles import ProofreadingProfile
 
 
 class FakeResponse:
@@ -50,6 +51,7 @@ def test_ollama_backend_posts_to_local_generate_endpoint(monkeypatch):
     assert captured["timeout"] == 12.5
     assert captured["payload"]["model"] == "llama3.2:3b"
     assert captured["payload"]["stream"] is False
+    assert captured["payload"]["options"] == {"temperature": 0.1}
     assert "Return only the corrected text." in captured["payload"]["prompt"]
     assert "teh quick fox jumps" in captured["payload"]["prompt"]
 
@@ -69,6 +71,7 @@ def test_ollama_backend_uses_configured_endpoint_model_and_timeout(monkeypatch):
     assert backend.proofread("done", "Business") == "Done"
     assert captured["url"] == "http://127.0.0.1:11500/api/generate"
     assert captured["payload"]["model"] == "mistral"
+    assert captured["payload"]["options"] == {"temperature": 0.1}
     assert captured["timeout"] == 4
 
 
@@ -95,3 +98,29 @@ def test_ollama_backend_fails_gracefully_on_timeout(monkeypatch):
 def test_ollama_backend_rejects_non_local_endpoints():
     with pytest.raises(LocalLLMConfigurationError, match="localhost"):
         proofread_text("do not upload", settings=AppSettings("https://example.com", "llama3.2:3b", 10))
+
+
+def test_ollama_backend_uses_profile_system_message_settings(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse({"response": "Done"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    profile = ProofreadingProfile(
+        "Release Notes",
+        "Proof release notes.",
+        "Use concise product-release language.",
+        temperature=0.35,
+        explain_changes=True,
+        preserve_tone=False,
+    )
+
+    result = proofread_text("fixed bug", profile, AppSettings("http://localhost:11434", "mistral", 5))
+
+    assert result == "Done"
+    assert captured["payload"]["options"] == {"temperature": 0.35}
+    assert "Use concise product-release language." in captured["payload"]["prompt"]
+    assert "Return the corrected text followed by a concise explanation" in captured["payload"]["prompt"]
+    assert "You may adjust tone" in captured["payload"]["prompt"]

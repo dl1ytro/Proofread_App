@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import urlparse
 
-from .profiles import profile_description
+from .profiles import DEFAULT_TEMPERATURE, ProofreadingProfile, find_profile
 from .settings import AppSettings
 
 LOCAL_LLM_UNAVAILABLE_MESSAGE = "Local LLM is not available. Please start Ollama."
@@ -27,7 +27,7 @@ class LocalLLMConfigurationError(ValueError):
 class ProofreadingBackend(Protocol):
     """Backend interface for offline proofreading providers."""
 
-    def proofread(self, text: str, profile: str) -> str:
+    def proofread(self, text: str, profile: str | ProofreadingProfile) -> str:
         """Return corrected text for the selected profile."""
 
 
@@ -37,14 +37,15 @@ class OllamaBackend:
 
     settings: AppSettings
 
-    def proofread(self, text: str, profile: str) -> str:
+    def proofread(self, text: str, profile: str | ProofreadingProfile) -> str:
         settings = self.settings.normalized()
         endpoint = _validate_local_endpoint(settings.ollama_endpoint)
+        selected_profile = _resolve_profile(profile)
         payload = {
             "model": settings.ollama_model,
-            "prompt": _build_prompt(text, profile),
+            "prompt": _build_prompt(text, selected_profile),
             "stream": False,
-            "options": {"temperature": 0.1},
+            "options": {"temperature": _profile_temperature(selected_profile)},
         }
         request = urllib.request.Request(
             f"{endpoint}/api/generate",
@@ -67,25 +68,45 @@ class OllamaBackend:
         return result
 
 
-def proofread_text(text: str, profile: str = "Standard", settings: AppSettings | None = None) -> str:
+def proofread_text(
+    text: str, profile: str | ProofreadingProfile = "Email", settings: AppSettings | None = None
+) -> str:
     """Proofread *text* offline with the configured local Ollama model."""
 
     backend = OllamaBackend(settings or AppSettings())
     return backend.proofread(text, profile)
 
 
-def _build_prompt(text: str, profile: str) -> str:
-    description = profile_description(profile)
+def _build_prompt(text: str, profile: ProofreadingProfile) -> str:
+    response_instruction = (
+        "Return the corrected text followed by a concise explanation of the changes."
+        if profile.explain_changes
+        else "Return only the corrected text."
+    )
+    tone_instruction = (
+        "Preserve the user's tone and meaning." if profile.preserve_tone else "You may adjust tone when it improves the result."
+    )
     return (
         "You are an offline proofreading assistant running locally in Ollama. "
-        "Correct spelling, grammar, punctuation, capitalization, and spacing. "
-        "Preserve the user's meaning and do not add commentary. "
-        "Return only the corrected text.\n\n"
-        f"Profile: {profile}\n"
-        f"Profile guidance: {description}\n\n"
+        f"{profile.system_message} "
+        f"{tone_instruction} "
+        "Do not add new facts or change the user's intent. "
+        f"{response_instruction}\n\n"
+        f"Profile: {profile.name}\n"
+        f"Profile guidance: {profile.description}\n\n"
         "Text to proofread:\n"
         f"{text}"
     )
+
+
+def _resolve_profile(profile: str | ProofreadingProfile) -> ProofreadingProfile:
+    if isinstance(profile, ProofreadingProfile):
+        return profile.normalized()
+    return find_profile(profile)
+
+
+def _profile_temperature(profile: ProofreadingProfile) -> float:
+    return DEFAULT_TEMPERATURE if profile.temperature is None else profile.temperature
 
 
 def _validate_local_endpoint(endpoint: str) -> str:
