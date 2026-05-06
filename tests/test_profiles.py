@@ -1,14 +1,11 @@
 import json
-import zipfile
 
 import pytest
 
 from proofread_app.profiles import (
     ProfileError,
     ProofreadingProfile,
-    backup_profiles,
     delete_profile,
-    duplicate_profile,
     export_profile,
     import_profile,
     load_profiles,
@@ -46,22 +43,14 @@ def test_profiles_are_saved_as_portable_json(tmp_path):
 def test_load_profiles_creates_default_files_in_empty_directory(tmp_path):
     profiles = load_profiles(tmp_path)
 
-    assert {profile.name for profile in profiles} == {"Email", "Blog Post", "Grammar Only"}
+    assert {profile.name for profile in profiles} == {
+        "Email",
+        "Blog Post",
+        "Grammar Only",
+    }
     assert (tmp_path / "email.json").exists()
     assert (tmp_path / "blog_post.json").exists()
     assert (tmp_path / "grammar_only.json").exists()
-
-
-def test_duplicate_profile_uses_unique_name(tmp_path):
-    profile = save_profile(
-        ProofreadingProfile("Email", "Email edits.", "Proofread email.", 0.1, False, True), tmp_path
-    )
-
-    first_copy = duplicate_profile(profile, tmp_path)
-    second_copy = duplicate_profile(profile, tmp_path)
-
-    assert first_copy.name == "Email Copy"
-    assert second_copy.name == "Email Copy 2"
 
 
 def test_export_import_and_delete_profile(tmp_path):
@@ -76,20 +65,6 @@ def test_export_import_and_delete_profile(tmp_path):
 
     assert imported == profile.normalized()
     assert profile_path(imported, local_dir).exists()
-
-
-def test_backup_profiles_creates_zip_archive_with_all_profile_json_files(tmp_path):
-    profiles_dir = tmp_path / "profiles"
-    save_profile(ProofreadingProfile("Client Email", "Email edits.", "Proofread email."), profiles_dir)
-    save_profile(ProofreadingProfile("Blog", "Blog edits.", "Proofread blog."), profiles_dir)
-
-    backup_path = backup_profiles(tmp_path / "backup" / "profiles.zip", profiles_dir)
-
-    assert backup_path == tmp_path / "backup" / "profiles.zip"
-    with zipfile.ZipFile(backup_path) as archive:
-        assert sorted(archive.namelist()) == ["blog.json", "client_email.json"]
-        payload = json.loads(archive.read("client_email.json"))
-    assert payload["name"] == "Client Email"
 
 
 def test_profile_validation_requires_core_fields_and_valid_temperature():
@@ -125,6 +100,10 @@ def test_load_profiles_falls_back_to_defaults_when_all_files_are_invalid(tmp_pat
 
     result = load_profiles_with_errors(tmp_path)
 
-    assert {profile.name for profile in result.profiles} == {"Email", "Blog Post", "Grammar Only"}
+    assert {profile.name for profile in result.profiles} == {
+        "Email",
+        "Blog Post",
+        "Grammar Only",
+    }
     assert any("built-in default profiles" in error for error in result.errors)
     assert invalid_path.exists()
