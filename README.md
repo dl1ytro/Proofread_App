@@ -43,6 +43,25 @@ $env:PYTHONPATH = "src"
 python -m proofread_app
 ```
 
+
+## Build a Windows EXE
+
+If you want to run the app without asking users to start it from source, build a Windows executable on a Windows 10 or Windows 11 machine. Python is required only on the build machine; the generated EXE can be copied to another Windows machine. Ollama must still be installed and running on the machine that runs the EXE.
+
+From the repository folder, run:
+
+```bat
+build_windows_exe.bat
+```
+
+The script creates an isolated `.venv-build` environment, installs PyInstaller, and writes the executable to:
+
+```text
+dist\Proofread App.exe
+```
+
+To test the EXE, make sure Ollama is running, then double-click `dist\Proofread App.exe`. If Windows SmartScreen appears, choose **More info** and **Run anyway** for your own unsigned local build.
+
 ## UI
 
 - Input text area for pasted or typed text.
