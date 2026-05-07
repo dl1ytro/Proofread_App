@@ -4,6 +4,37 @@ A lightweight desktop proofreading interface designed for Windows 10 and Windows
 
 Proofreading is handled offline through a local Ollama server. The app sends text only to the configured local Ollama endpoint and rejects non-local endpoints so proofreading content is not uploaded to a remote service.
 
+
+## Quick start for Windows users
+
+If you only want to use the app, you should not need Python or the source code.
+
+1. Install and start [Ollama](https://ollama.com/).
+2. Pull the default local model:
+
+```powershell
+ollama pull llama3.2:3b
+```
+
+3. Download `Proofread App.exe` from the latest GitHub Release.
+4. Double-click `Proofread App.exe`.
+5. Paste text, choose a profile, click **Proofread**, then copy the result.
+
+If there is no GitHub Release yet, the repository owner can create one by pushing a version tag such as `v1.0.0`; the **Build Windows EXE** workflow will build and attach `Proofread App.exe` to that release.
+
+## How maintainers publish a user download
+
+For normal users, GitHub Releases are easier than GitHub Actions artifacts. To publish a new EXE:
+
+```bash
+git checkout main
+git pull
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions will build the Windows EXE and attach `Proofread App.exe` to the release for that tag. Use a new version tag, such as `v1.0.1`, for later releases.
+
 ## Version 1 scope
 
 Version 1 includes only the core local proofreading workflow:
@@ -46,7 +77,7 @@ python -m proofread_app
 
 ## Get a Windows EXE from GitHub Actions
 
-The easiest way to get an EXE is to let GitHub build it for you, so you do not spend time troubleshooting PyInstaller on your PC.
+GitHub Releases are best for normal users. GitHub Actions artifacts are useful when you want to test a build before publishing a release.
 
 1. Open the repository on GitHub.
 2. Go to **Actions**.
