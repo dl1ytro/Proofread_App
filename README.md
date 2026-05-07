@@ -4,6 +4,37 @@ A lightweight desktop proofreading interface designed for Windows 10 and Windows
 
 Proofreading is handled offline through a local Ollama server. The app sends text only to the configured local Ollama endpoint and rejects non-local endpoints so proofreading content is not uploaded to a remote service.
 
+
+## Quick start for Windows users
+
+If you only want to use the app, you should not need Python or the source code.
+
+1. Install and start [Ollama](https://ollama.com/).
+2. Pull the default local model:
+
+```powershell
+ollama pull llama3.2:3b
+```
+
+3. Download `Proofread App.exe` from the latest GitHub Release.
+4. Double-click `Proofread App.exe`.
+5. Paste text, choose a profile, click **Proofread**, then copy the result.
+
+If there is no GitHub Release yet, the repository owner can create one by pushing a version tag such as `v1.0.0`; the **Build Windows EXE** workflow will build and attach `Proofread App.exe` to that release.
+
+## How maintainers publish a user download
+
+For normal users, GitHub Releases are easier than GitHub Actions artifacts. To publish a new EXE:
+
+```bash
+git checkout main
+git pull
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions will build the Windows EXE and attach `Proofread App.exe` to the release for that tag. Use a new version tag, such as `v1.0.1`, for later releases.
+
 ## Version 1 scope
 
 Version 1 includes only the core local proofreading workflow:
@@ -42,6 +73,51 @@ When running directly from a checkout without installing the package:
 $env:PYTHONPATH = "src"
 python -m proofread_app
 ```
+
+
+## Get a Windows EXE from GitHub Actions
+
+GitHub Releases are best for normal users. GitHub Actions artifacts are useful when you want to test a build before publishing a release.
+
+1. Open the repository on GitHub.
+2. Go to **Actions**.
+3. Select **Build Windows EXE**.
+4. Click **Run workflow**.
+5. Wait for the workflow to finish.
+6. Open the completed workflow run and download the **Proofread-App-Windows-EXE** artifact.
+7. Unzip the artifact and run `Proofread App.exe`.
+
+The EXE still needs Ollama installed and running on the Windows machine where you use the app.
+
+## Build a Windows EXE locally
+
+You need the project files only on the Windows machine that builds the EXE. The easiest options are:
+
+- Download the repository ZIP from GitHub, extract it, and open a terminal in the extracted folder.
+- Or clone the repository with Git:
+
+```bat
+git clone <repository-url>
+cd Proofread_App
+```
+
+You do not need the project folder on every computer that runs the app. After the EXE is built, copy only `dist\Proofread App.exe` to the Windows machine where you want to use it. Python is required only on the build machine; Ollama must still be installed and running on the machine that runs the EXE.
+
+From the repository folder, run this in a normal Command Prompt or PowerShell window. You do not need to run it as Administrator:
+
+```bat
+build_windows_exe.bat
+```
+
+The script changes into the project folder, creates an isolated `.venv-build` environment, installs PyInstaller, saves a build log to `build\build_windows_exe.log`, and writes the executable to:
+
+```text
+dist\Proofread App.exe
+```
+
+To test the EXE, make sure Ollama is running, then double-click `dist\Proofread App.exe`. If Windows SmartScreen appears, choose **More info** and **Run anyway** for your own unsigned local build.
+
+If the script finishes but you do not see `dist\Proofread App.exe`, open `build\build_windows_exe.log` and check the final error message. Older versions could place `dist` under the terminal's current directory when run from an elevated prompt; the current script always writes to the repository's `dist` folder and pauses so you can read the result before the window closes.
 
 ## UI
 
